@@ -4,6 +4,8 @@
 #![doc = include_str!("../README.md")]
 #![allow(clippy::type_complexity, clippy::result_large_err)]
 
+pub mod optimizer;
+
 use std::{
     collections::{HashMap, HashSet},
     fmt::{Debug, Display},
