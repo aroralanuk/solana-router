@@ -54,9 +54,22 @@ pub fn find_optimal_amount(
     max_amount: u64,
     config: &BisectionConfig,
 ) -> eyre::Result<BisectionResult> {
-    // Edge case: nonsensical target price → don't trade
-    if target_price <= 0.0 || max_amount == 0 {
+    // Edge case: no capacity or negative target price - don't trade
+    if max_amount == 0 || target_price < 0.0 {
         return Ok(BisectionResult { optimal_amount: 0, optimal_output: 0, marginal_rate: f64::INFINITY, iterations: 0, converged: true });
+    }
+
+    // Edge case: target_price = 0 means input is free → trade max amount
+    // (any positive marginal rate is profitable, so trade as much as possible)
+    if target_price == 0.0 {
+        let quote = quoter.quote(dex, max_amount)?;
+        return Ok(BisectionResult {
+            optimal_amount: max_amount,
+            optimal_output: quote.amount_out,
+            marginal_rate: 0.0,
+            iterations: 0,
+            converged: true,
+        });
     }
 
     let mut lo: u64 = 0;
@@ -234,14 +247,16 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_bisection_zero_price_returns_zero() {
+    fn test_bisection_zero_price_trades_max() {
         let mut quoter = build_test_quoter(&[Dex::HumidiFi]);
         let config = BisectionConfig::default();
+        let max_amount = 1_000_000_000u64;
 
-        let result = find_optimal_amount(&mut quoter, &Dex::HumidiFi, 0.0, 1_000_000_000, &config).expect("bisection failed");
+        let result = find_optimal_amount(&mut quoter, &Dex::HumidiFi, 0.0, max_amount, &config).expect("bisection failed");
 
-        assert_eq!(result.optimal_amount, 0);
-        assert_eq!(result.optimal_output, 0);
+        // target_price=0 means input is free → trade max amount
+        assert_eq!(result.optimal_amount, max_amount);
+        assert!(result.optimal_output > 0, "should produce output at max amount");
         assert!(result.converged);
         assert_eq!(result.iterations, 0);
     }
